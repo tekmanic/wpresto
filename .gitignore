@@ -1,0 +1,14 @@
+# Binaries
+/bin/
+*.exe
+wpstatic
+
+# Local config (may contain secrets)
+wpstatic.yaml
+.env
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/

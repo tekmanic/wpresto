@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tekmanic/wpstatic/internal/config"
-	"github.com/tekmanic/wpstatic/internal/minify"
-	"github.com/tekmanic/wpstatic/internal/strip"
+	"github.com/tekmanic/wpresto/internal/config"
+	"github.com/tekmanic/wpresto/internal/minify"
+	"github.com/tekmanic/wpresto/internal/strip"
 )
 
 func TestPagePath(t *testing.T) {

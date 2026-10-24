@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/tekmanic/wpstatic/internal/config"
-	"github.com/tekmanic/wpstatic/internal/crawl"
-	"github.com/tekmanic/wpstatic/internal/minify"
-	"github.com/tekmanic/wpstatic/internal/publish"
-	"github.com/tekmanic/wpstatic/internal/strip"
+	"github.com/tekmanic/wpresto/internal/config"
+	"github.com/tekmanic/wpresto/internal/crawl"
+	"github.com/tekmanic/wpresto/internal/minify"
+	"github.com/tekmanic/wpresto/internal/publish"
+	"github.com/tekmanic/wpresto/internal/strip"
 )
 
 var buildCmd = &cobra.Command{
@@ -38,10 +38,10 @@ func init() {
 func loadConfig() (*config.Config, error) {
 	path := cfgFile
 	if path == "" {
-		path = os.Getenv("WPSTATIC_CONFIG")
+		path = os.Getenv("WPRESTO_CONFIG")
 	}
 	if path == "" {
-		path = "wpstatic.yaml"
+		path = "wpresto.yaml"
 	}
 	return config.Load(path)
 }
@@ -79,7 +79,7 @@ func RunBuild(ctx context.Context, cfg *config.Config) error {
 	}()
 
 	if verbose {
-		fmt.Printf("wpstatic: building %s from %s -> %s\n", buildID, cfg.Site.URL, cfg.Output.Dir)
+		fmt.Printf("wpresto: building %s from %s -> %s\n", buildID, cfg.Site.URL, cfg.Output.Dir)
 	}
 
 	started := time.Now()

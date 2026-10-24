@@ -1,7 +1,7 @@
 GO ?= go
-BIN := bin/wpstatic
+BIN := bin/wpresto
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-LDFLAGS := -s -w -X github.com/tekmanic/wpstatic/cmd.Version=$(VERSION)
+LDFLAGS := -s -w -X github.com/tekmanic/wpresto/cmd.Version=$(VERSION)
 
 .PHONY: all build test vet fmt lint clean install
 
@@ -26,4 +26,4 @@ clean:
 	rm -rf bin
 
 install: build
-	install -m 0755 $(BIN) /usr/local/bin/wpstatic
+	install -m 0755 $(BIN) /usr/local/bin/wpresto

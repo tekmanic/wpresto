@@ -1,4 +1,4 @@
-// Package cmd implements the wpstatic command-line interface.
+// Package cmd implements the wpresto command-line interface.
 package cmd
 
 import (
@@ -17,9 +17,9 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "wpstatic",
+	Use:   "wpresto",
 	Short: "Scrape a local WordPress site into a minified static cache for nginx",
-	Long: `wpstatic crawls a WordPress site as an anonymous user, strips sensitive
+	Long: `wpresto crawls a WordPress site as an anonymous user, strips sensitive
 admin/login/API/plugin content, minifies and compresses the result, and
 publishes it atomically to a static filesystem served by nginx.
 
@@ -38,6 +38,6 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "path to config file (default: $WPSTATIC_CONFIG or ./wpstatic.yaml)")
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "path to config file (default: $WPRESTO_CONFIG or ./wpresto.yaml)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose logging")
 }

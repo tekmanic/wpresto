@@ -47,7 +47,7 @@ func TestValidateRejectsBadStripForms(t *testing.T) {
 
 func TestLoadFromFile(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "wpstatic.yaml")
+	path := filepath.Join(dir, "wpresto.yaml")
 	content := `
 site:
   url: http://127.0.0.1:9999
@@ -80,7 +80,7 @@ crawl:
 }
 
 func TestLoadEnvOverride(t *testing.T) {
-	t.Setenv("WPSTATIC_SITE_URL", "http://env.example")
+	t.Setenv("WPRESTO_SITE_URL", "http://env.example")
 	c, err := Load("")
 	if err != nil {
 		t.Fatal(err)
@@ -91,7 +91,7 @@ func TestLoadEnvOverride(t *testing.T) {
 }
 
 func TestLoadMissingFileErrors(t *testing.T) {
-	if _, err := Load("/nonexistent/path/wpstatic.yaml"); err == nil {
+	if _, err := Load("/nonexistent/path/wpresto.yaml"); err == nil {
 		t.Errorf("expected error for missing config file")
 	}
 }

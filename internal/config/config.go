@@ -1,4 +1,4 @@
-// Package config loads and validates wpstatic configuration.
+// Package config loads and validates wpresto configuration.
 //
 // Precedence (highest wins): CLI flag > environment variable > config file > default.
 // Secrets (hook secret) should be supplied via environment, never committed to a file.
@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Config is the root configuration for wpstatic.
+// Config is the root configuration for wpresto.
 type Config struct {
 	Site      SiteConfig     `mapstructure:"site"`
 	Output    OutputConfig   `mapstructure:"output"`
@@ -128,13 +128,13 @@ func DefaultQueryParams() []string {
 func Default() *Config {
 	return &Config{
 		Site:      SiteConfig{URL: "http://localhost:8081"},
-		Output:    OutputConfig{Dir: "/var/www/wpstatic"},
+		Output:    OutputConfig{Dir: "/var/www/wpresto"},
 		Crawl:     CrawlConfig{Concurrency: 8, Timeout: 30 * time.Second, MaxPages: 500, MaxAssetBytes: 20 << 20},
 		Strip:     StripConfig{Blocklist: DefaultBlocklist(), StripForms: "wp-endpoints", StripGeneratorMeta: true, QueryParams: DefaultQueryParams()},
 		Minify:    MinifyConfig{Enabled: true, HTML: true, CSS: true, JS: true},
 		Compress:  CompressConfig{Gzip: true},
 		Hook:      HookConfig{Enabled: false, Listen: "127.0.0.1:9090", Secret: ""},
-		UserAgent: "wpstatic/1.0 (+local static cache)",
+		UserAgent: "wpresto/1.0 (+local static cache)",
 	}
 }
 
@@ -166,8 +166,8 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("hook.secret", def.Hook.Secret)
 	v.SetDefault("user_agent", def.UserAgent)
 
-	// Environment overrides (WPSTATIC_SITE_URL, WPSTATIC_HOOK_SECRET, ...).
-	v.SetEnvPrefix("WPSTATIC")
+	// Environment overrides (WPRESTO_SITE_URL, WPRESTO_HOOK_SECRET, ...).
+	v.SetEnvPrefix("WPRESTO")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 

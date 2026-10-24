@@ -15,10 +15,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/tekmanic/wpstatic/internal/config"
-	"github.com/tekmanic/wpstatic/internal/minify"
-	"github.com/tekmanic/wpstatic/internal/publish"
-	"github.com/tekmanic/wpstatic/internal/strip"
+	"github.com/tekmanic/wpresto/internal/config"
+	"github.com/tekmanic/wpresto/internal/minify"
+	"github.com/tekmanic/wpresto/internal/publish"
+	"github.com/tekmanic/wpresto/internal/strip"
 	"golang.org/x/net/html"
 )
 
@@ -294,7 +294,7 @@ func (c *Crawler) noteError(u *url.URL, err error) {
 	c.mu.Lock()
 	c.errors++
 	c.mu.Unlock()
-	fmt.Printf("wpstatic: error %s: %v\n", u, err)
+	fmt.Printf("wpresto: error %s: %v\n", u, err)
 }
 
 func (c *Crawler) noteSkipped(u *url.URL) {

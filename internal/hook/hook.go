@@ -127,7 +127,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) authorized(r *http.Request) bool {
-	provided := []byte(r.Header.Get("X-WPStatic-Secret"))
+	provided := []byte(r.Header.Get("X-WPresto-Secret"))
 	if len(provided) == 0 || len(s.secret) == 0 {
 		return false
 	}

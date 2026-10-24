@@ -26,7 +26,7 @@ jobs:
         run: go test -race -count=1 ./...
 
       - name: Build
-        run: go build -trimpath -o bin/wpstatic .
+        run: go build -trimpath -o bin/wpresto .
 
       - name: Smoke: version
-        run: ./bin/wpstatic version
+        run: ./bin/wpresto version

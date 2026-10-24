@@ -1,10 +1,10 @@
 # Binaries
 /bin/
 *.exe
-wpstatic
+wpresto
 
 # Local config (may contain secrets)
-wpstatic.yaml
+wpresto.yaml
 .env
 
 # OS / editor

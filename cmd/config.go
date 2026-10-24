@@ -10,7 +10,7 @@ import (
 
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "Manage the wpstatic configuration file",
+	Short: "Manage the wpresto configuration file",
 }
 
 var configInitCmd = &cobra.Command{
@@ -19,7 +19,7 @@ var configInitCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := cfgFile
 		if path == "" {
-			path = "wpstatic.yaml"
+			path = "wpresto.yaml"
 		}
 		if _, err := os.Stat(path); err == nil {
 			return fmt.Errorf("%s already exists", path)
@@ -55,12 +55,12 @@ var configSetCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := cfgFile
 		if path == "" {
-			path = "wpstatic.yaml"
+			path = "wpresto.yaml"
 		}
 		v := viper.New()
 		v.SetConfigFile(path)
 		if err := v.ReadInConfig(); err != nil {
-			return fmt.Errorf("read %s: %w (run 'wpstatic config init' first)", path, err)
+			return fmt.Errorf("read %s: %w (run 'wpresto config init' first)", path, err)
 		}
 		v.Set(args[0], args[1])
 		if err := v.WriteConfig(); err != nil {
@@ -80,10 +80,10 @@ func init() {
 func viperForConfig() (*viper.Viper, error) {
 	path := cfgFile
 	if path == "" {
-		path = os.Getenv("WPSTATIC_CONFIG")
+		path = os.Getenv("WPRESTO_CONFIG")
 	}
 	if path == "" {
-		path = "wpstatic.yaml"
+		path = "wpresto.yaml"
 	}
 	v := viper.New()
 	v.SetConfigType("yaml")
@@ -97,16 +97,16 @@ func viperForConfig() (*viper.Viper, error) {
 			}
 		}
 	}
-	v.SetEnvPrefix("WPSTATIC")
+	v.SetEnvPrefix("WPRESTO")
 	return v, nil
 }
 
-const sampleConfig = `# wpstatic configuration
+const sampleConfig = `# wpresto configuration
 site:
   url: http://localhost:8081
 
 output:
-  dir: /var/www/wpstatic
+  dir: /var/www/wpresto
 
 crawl:
   concurrency: 8
@@ -134,7 +134,7 @@ compress:
 hook:
   enabled: false
   listen: 127.0.0.1:9090
-  # secret: set via the WPSTATIC_HOOK_SECRET environment variable
+  # secret: set via the WPRESTO_HOOK_SECRET environment variable
 
-user_agent: wpstatic/1.0 (+local static cache)
+user_agent: wpresto/1.0 (+local static cache)
 `

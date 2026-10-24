@@ -1,20 +1,22 @@
-# wpstatic
+# wpresto
 
-A Go binary that turns a local WordPress site into a **minified, compressed static cache** served by nginx. It crawls your site exactly as an anonymous visitor sees it, **strips out the sensitive WordPress surface** (admin, login, REST API, plugin internals, fingerprinting meta), minifies HTML/CSS/JS, writes gzip siblings for `gzip_static`, and publishes the result **atomically** so nginx never serves a half-written site.
+**wpresto** is an open-source WordPress-to-static exporter that transforms your WordPress site into portable, deployable static files.
+
+Under the hood it's a single Go binary that turns a local WordPress site into a **minified, compressed static cache** served by nginx. It crawls your site exactly as an anonymous visitor sees it, **strips out the sensitive WordPress surface** (admin, login, REST API, plugin internals, fingerprinting meta), minifies HTML/CSS/JS, writes gzip siblings for `gzip_static`, and publishes the result **atomically** so nginx never serves a half-written site.
 
 Builds are triggered two ways:
 
-- **Cron** — run `wpstatic build` on a schedule.
+- **Cron** — run `wpresto build` on a schedule.
 - **WordPress "go live" plugin** — a bundled single-file plugin adds a *Go Live* button (admin bar + settings page) that calls a localhost hook endpoint to rebuild on demand.
 
 ```
 ┌────────────┐   anonymous GET    ┌──────────────────────────────┐
-│  WordPress │ ◄───────────────── │  wpstatic (Go)               │
+│  WordPress │ ◄───────────────── │  wpresto (Go)               │
 │  (origin)  │                    │  crawl → strip → minify → gz │
 └────────────┘                    └──────────────┬───────────────┘
                                                  │ atomic publish
                                                  ▼
-                                        /var/www/wpstatic/live
+                                        /var/www/wpresto/live
                                                  │
                                                  ▼
 ┌────────────┐   static hit     ┌──────────────────────────────┐
@@ -42,10 +44,10 @@ Builds are triggered two ways:
 ## Install
 
 ```sh
-git clone https://github.com/tekmanic/wpstatic
-cd wpstatic
-make build          # → bin/wpstatic
-sudo make install   # → /usr/local/bin/wpstatic
+git clone https://github.com/tekmanic/wpresto
+cd wpresto
+make build          # → bin/wpresto
+sudo make install   # → /usr/local/bin/wpresto
 ```
 
 Requires Go 1.22+ to build. The binary is a single static-ish executable (CGO not required).
@@ -54,42 +56,42 @@ Requires Go 1.22+ to build. The binary is a single static-ish executable (CGO no
 
 ```sh
 # 1. Generate a config
-wpstatic config init            # writes ./wpstatic.yaml
+wpresto config init            # writes ./wpresto.yaml
 
-# 2. Point it at your site + output dir (edit wpstatic.yaml, or use env)
-export WPSTATIC_SITE_URL=http://localhost:8081
-export WPSTATIC_OUTPUT_DIR=/var/www/wpstatic
+# 2. Point it at your site + output dir (edit wpresto.yaml, or use env)
+export WPRESTO_SITE_URL=http://localhost:8081
+export WPRESTO_OUTPUT_DIR=/var/www/wpresto
 
 # 3. Build
-wpstatic build
+wpresto build
 # build 3f9a… complete: 42 pages, 187 assets, 3.2MB in 4.1s (skipped 0, errors 0)
 
-# 4. Point nginx at /var/www/wpstatic/live (see examples/nginx.conf)
+# 4. Point nginx at /var/www/wpresto/live (see examples/nginx.conf)
 ```
 
 ## Commands
 
 | Command | Description |
 |---|---|
-| `wpstatic build` | Crawl the site and publish a new static build |
-| `wpstatic hook` | Run the localhost trigger endpoint for the WP plugin |
-| `wpstatic config init` | Write a sample `wpstatic.yaml` |
-| `wpstatic config get [key]` | Print a config value (or all) |
-| `wpstatic config set <key> <value>` | Set a value in the config file |
-| `wpstatic version` | Print version info |
+| `wpresto build` | Crawl the site and publish a new static build |
+| `wpresto hook` | Run the localhost trigger endpoint for the WP plugin |
+| `wpresto config init` | Write a sample `wpresto.yaml` |
+| `wpresto config get [key]` | Print a config value (or all) |
+| `wpresto config set <key> <value>` | Set a value in the config file |
+| `wpresto version` | Print version info |
 
-Global flags: `-c, --config <path>` (default `$WPSTATIC_CONFIG` or `./wpstatic.yaml`), `-v, --verbose`.
+Global flags: `-c, --config <path>` (default `$WPRESTO_CONFIG` or `./wpresto.yaml`), `-v, --verbose`.
 
 ## Configuration
 
-Precedence: **CLI flag > environment > config file > default**. Env vars use the `WPSTATIC_` prefix with `.` → `_` (e.g. `WPSTATIC_SITE_URL`, `WPSTATIC_HOOK_SECRET`).
+Precedence: **CLI flag > environment > config file > default**. Env vars use the `WPRESTO_` prefix with `.` → `_` (e.g. `WPRESTO_SITE_URL`, `WPRESTO_HOOK_SECRET`).
 
 ```yaml
 site:
   url: http://localhost:8081        # WordPress origin to scrape
 
 output:
-  dir: /var/www/wpstatic            # live tree published to <dir>/live
+  dir: /var/www/wpresto            # live tree published to <dir>/live
 
 crawl:
   concurrency: 8                    # parallel fetches
@@ -115,9 +117,9 @@ compress:
 hook:
   enabled: false
   listen: 127.0.0.1:9090
-  # secret: set via WPSTATIC_HOOK_SECRET (required when enabled)
+  # secret: set via WPRESTO_HOOK_SECRET (required when enabled)
 
-user_agent: wpstatic/1.0 (+local static cache)
+user_agent: wpresto/1.0 (+local static cache)
 ```
 
 ### What gets stripped (defaults)
@@ -131,20 +133,20 @@ user_agent: wpstatic/1.0 (+local static cache)
 
 ## The WordPress "go live" plugin
 
-A single-file plugin at `plugin/wpstatic-golive/wpstatic-golive.php`:
+A single-file plugin at `plugin/wpresto-golive/wpresto-golive.php`:
 
 1. Copy it into your theme or a plugins directory:
    ```sh
-   cp plugin/wpstatic-golive/wpstatic-golive.php /path/to/wp-content/plugins/wpstatic-golive.php
+   cp plugin/wpresto-golive/wpresto-golive.php /path/to/wp-content/plugins/wpresto-golive.php
    ```
 2. Activate it in WordPress.
-3. Go to **Settings → wpstatic Go Live** and set the **Hook URL** (`http://127.0.0.1:9090`) and **Hook secret**.
+3. Go to **Settings → wpresto Go Live** and set the **Hook URL** (`http://127.0.0.1:9090`) and **Hook secret**.
 4. Run the hook server on the host:
    ```sh
-   export WPSTATIC_HOOK_SECRET='a-long-random-string'
-   wpstatic hook
+   export WPRESTO_HOOK_SECRET='a-long-random-string'
+   wpresto hook
    ```
-5. Click **Go Live** in the admin bar (or **Go Live Now** on the settings page). The plugin POSTs to `/go-live` with the shared secret; wpstatic rebuilds and publishes. `GET /status` reports `idle | running | success | error`.
+5. Click **Go Live** in the admin bar (or **Go Live Now** on the settings page). The plugin POSTs to `/go-live` with the shared secret; wpresto rebuilds and publishes. `GET /status` reports `idle | running | success | error`.
 
 The hook binds to `127.0.0.1` by default and requires the secret (constant-time compare), so it's not reachable off the host.
 
@@ -152,7 +154,7 @@ The hook binds to `127.0.0.1` by default and requires the secret (constant-time 
 
 See [`examples/nginx.conf`](examples/nginx.conf). Key points:
 
-- `root /var/www/wpstatic/live;`
+- `root /var/www/wpresto/live;`
 - `gzip_static on;` — serves the pre-compressed `.gz` siblings.
 - `try_files $uri $uri/index.html $uri.html @dynamic;` — static hit, else fall back.
 - `@dynamic { proxy_pass http://127.0.0.1:8081; }` — uncached requests go to the real WordPress backend.
@@ -161,7 +163,7 @@ See [`examples/nginx.conf`](examples/nginx.conf). Key points:
 
 ```cron
 # Rebuild every 15 minutes
-*/15 * * * * cd /opt/wpstatic && /usr/local/bin/wpstatic build >> /var/log/wpstatic.log 2>&1
+*/15 * * * * cd /opt/wpresto && /usr/local/bin/wpresto build >> /var/log/wpresto.log 2>&1
 ```
 
 Or use the plugin for on-demand rebuilds after content changes.

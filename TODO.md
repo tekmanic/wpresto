@@ -1,4 +1,4 @@
-# TODO — wpstatic
+# TODO — wpresto
 
 Resumable work breakdown for the WordPress → static cache binary.
 Last updated: 2026-10-24.
@@ -14,12 +14,12 @@ by cron or by a WordPress "go live" plugin.
 ---
 
 ## Phase 1 — Scaffold ✅
-- [x] Go module `github.com/tekmanic/wpstatic` (go 1.22)
+- [x] Go module `github.com/tekmanic/wpresto` (go 1.22)
 - [x] Cobra/Viper CLI skeleton
 - [x] Package layout: cmd, internal/{config,crawl,strip,minify,publish,hook}, plugin, examples
 
 ## Phase 2 — Config ✅
-- [x] Viper: flag > env (WPSTATIC_*) > file > default
+- [x] Viper: flag > env (WPRESTO_*) > file > default
 - [x] Sections: site, output, crawl, strip, minify, compress, hook, user_agent
 - [x] Validation (URL scheme, concurrency, timeout, strip_forms enum, hook secret required when enabled)
 - [x] `config init/get/set` commands
@@ -60,7 +60,7 @@ by cron or by a WordPress "go live" plugin.
 
 ## Phase 7 — Hook server ✅
 - [x] localhost HTTP server (default 127.0.0.1:9090)
-- [x] POST /go-live with X-WPStatic-Secret (constant-time compare)
+- [x] POST /go-live with X-WPresto-Secret (constant-time compare)
 - [x] 202 accepted / 409 busy / 401 unauthorized
 - [x] GET /status (idle|running|success|error), GET /healthz
 - [x] Async build, single-flight
@@ -73,7 +73,7 @@ by cron or by a WordPress "go live" plugin.
 - [x] End-to-end cmd test (httptest fake WP → live output verified)
 
 ## Phase 9 — WordPress plugin ✅
-- [x] Single-file plugin `plugin/wpstatic-golive/wpstatic-golive.php`
+- [x] Single-file plugin `plugin/wpresto-golive/wpresto-golive.php`
 - [x] Settings page (hook URL + secret), admin bar "Go Live", "Go Live Now" button
 - [x] AJAX trigger (nonce + manage_options), server-side secret (client values ignored)
 - [x] Escaped output, i18n, PHP 7.4 compatible
@@ -93,18 +93,18 @@ by cron or by a WordPress "go live" plugin.
 - [x] CLI smoke: version, --help
 
 ## Phase 12 — GitHub ✅
-- [x] Repo tekmanic/wpstatic created
+- [x] Repo tekmanic/wpresto created
 - [x] Branch pushed
 - [x] PR opened
 
 ---
 
 ## Open / follow-up
-- [ ] **Manual smoke test on a real WordPress host**: run `wpstatic build` against a
+- [ ] **Manual smoke test on a real WordPress host**: run `wpresto build` against a
       live WP site, verify the static output in a browser, confirm admin/login/API
       are absent, and confirm the dynamic fallback works. (Needs a host with WP + nginx.)
 - [ ] **Optional**: Dockerfile for the binary (single static binary, easy to ship).
-- [ ] **Optional**: `wpstatic build --dry-run` (crawl + report, no publish).
+- [ ] **Optional**: `wpresto build --dry-run` (crawl + report, no publish).
 - [ ] **Optional**: sitemap.xml generation from the crawled page set.
 - [ ] **Optional**: respect robots.txt (currently ignored — local site assumption).
 - [ ] **Optional**: image optimization (resize/compress) beyond passthrough.

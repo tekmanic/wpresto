@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/tekmanic/wpstatic/internal/hook"
+	"github.com/tekmanic/wpresto/internal/hook"
 )
 
 var hookCmd = &cobra.Command{
@@ -23,7 +23,7 @@ var hookCmd = &cobra.Command{
 			return RunBuild(ctx, cfg)
 		}
 		srv := hook.New(cfg.Hook.Listen, cfg.Hook.Secret, buildFn)
-		fmt.Printf("wpstatic: hook listening on %s\n", cfg.Hook.Listen)
+		fmt.Printf("wpresto: hook listening on %s\n", cfg.Hook.Listen)
 		return srv.ServeHTTP(cmd.Context())
 	},
 }

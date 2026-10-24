@@ -37,7 +37,7 @@ func TestGoLiveRequiresSecret(t *testing.T) {
 
 	// Wrong secret -> 401.
 	req, _ := http.NewRequest("POST", ts.URL+"/go-live", nil)
-	req.Header.Set("X-WPStatic-Secret", "wrong")
+	req.Header.Set("X-WPresto-Secret", "wrong")
 	resp2, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +55,7 @@ func TestGoLiveTriggersBuild(t *testing.T) {
 	defer ts.Close()
 
 	req, _ := http.NewRequest("POST", ts.URL+"/go-live", nil)
-	req.Header.Set("X-WPStatic-Secret", "s3cret")
+	req.Header.Set("X-WPresto-Secret", "s3cret")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +108,7 @@ func TestGoLiveConflictsWhenBusy(t *testing.T) {
 
 	do := func() int {
 		req, _ := http.NewRequest("POST", ts.URL+"/go-live", nil)
-		req.Header.Set("X-WPStatic-Secret", "s3cret")
+		req.Header.Set("X-WPresto-Secret", "s3cret")
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)

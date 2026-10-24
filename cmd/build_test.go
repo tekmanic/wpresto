@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tekmanic/wpstatic/internal/config"
+	"github.com/tekmanic/wpresto/internal/config"
 )
 
 // TestRunBuildEndToEnd validates the full CLI orchestrator: config -> crawl ->

@@ -1,4 +1,4 @@
-module github.com/tekmanic/wpstatic
+module github.com/tekmanic/wpresto
 
 go 1.27.1
 

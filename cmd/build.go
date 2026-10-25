@@ -21,6 +21,35 @@ import (
 var buildCmd = &cobra.Command{
 	Use:   "build",
 	Short: "Crawl the site and publish a new static build",
+	Long: `Crawl the configured WordPress site and publish a new static build.
+
+What happens:
+  1. Creates a staging dir <output.dir>/.staging-<buildID>
+  2. Crawls site.url as an anonymous user (pages + assets, same host only,
+     capped by crawl.max_pages)
+  3. Strips the WordPress surface (admin/login/API links, generator meta,
+     tracking params) and rewrites same-host URLs to relative
+  4. Minifies HTML/CSS/JS and writes .gz siblings (compress.gzip)
+  5. Atomically renames staging to <output.dir>/live; the previous build is
+     moved aside and removed. On failure the staging dir is cleaned up and
+     the existing live tree is untouched.
+  6. Writes <output.dir>/live/build-info.json (build id, counts, duration)
+
+Output on success (stdout):
+  build <id> complete: N pages, M assets, B bytes in D (skipped S, errors E)
+
+Exit code: 0 on success, 1 on failure.
+
+site.url and output.dir are required (config file or env). All other keys
+have sane defaults; see 'wpresto config get' for the effective values.`,
+	Example: `  # one-off build with an explicit config file
+  wpresto build -c /etc/wpresto/wpresto.yaml
+
+  # no config file: everything via env
+  WPRESTO_SITE_URL=http://example.com WPRESTO_OUTPUT_DIR=/var/www/wpresto wpresto build
+
+  # cron entry (every 15 minutes)
+  */15 * * * * cd /opt/wpresto && /usr/local/bin/wpresto build >> /var/log/wpresto.log 2>&1`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := loadConfig()
 		if err != nil {

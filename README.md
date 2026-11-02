@@ -4,26 +4,33 @@
 
 Under the hood it's a single Go binary that turns a local WordPress site into a **minified, compressed static cache** served by nginx. It crawls your site exactly as an anonymous visitor sees it, **strips out the sensitive WordPress surface** (admin, login, REST API, plugin internals, fingerprinting meta), minifies HTML/CSS/JS, writes gzip siblings for `gzip_static`, and publishes the result **atomically** so nginx never serves a half-written site.
 
+On top of the static cache, wpresto has a **plugin system** that replaces the *dynamic* parts of your site. During a build it **detects dynamic content** (contact forms, subscribe forms, analytics beacons, API/AJAX endpoints), **matches each to a plugin** in the inventory, **rewrites the form/endpoint to point at the plugin**, and **flags anything no plugin covers**. A small `wpresto serve` process runs the matched plugins in a simple HTTP server (Lambda-style handlers), so the static site stays dynamic-capable without the WordPress backend.
+
 Builds are triggered two ways:
 
 - **Cron** — run `wpresto build` on a schedule.
 - **WordPress "go live" plugin** — a bundled single-file plugin adds a *Go Live* button (admin bar + settings page) that calls a localhost hook endpoint to rebuild on demand.
 
 ```
-┌────────────┐   anonymous GET    ┌──────────────────────────────┐
-│  WordPress │ ◄───────────────── │  wpresto (Go)               │
-│  (origin)  │                    │  crawl → strip → minify → gz │
-└────────────┘                    └──────────────┬───────────────┘
+┌────────────┐   anonymous GET    ┌───────────────────────────────────┐
+│  WordPress │ ◄───────────────── │  wpresto build (Go)              │
+│  (origin)  │                    │  crawl → detect → strip → minify │
+└────────────┘                    │  → gz → match plugins → publish  │
+                                  └──────────────┬────────────────────┘
                                                  │ atomic publish
                                                  ▼
                                         /var/www/wpresto/live
+                                        (index.html, .gz, …,
+                                         dynamic-report.json)
                                                  │
                                                  ▼
-┌────────────┐   static hit     ┌──────────────────────────────┐
-│   nginx    │ ───────────────► │  live/  (index.html, .gz, …) │
-│            │   dynamic miss   │  build-info.json             │
-│            │ ───────────────► │  @dynamic → proxy to WP      │
-└────────────┘                  └──────────────────────────────┘
+┌────────────┐   static hit     ┌───────────────────────────────────┐
+│   nginx    │ ───────────────► │  live/  (served directly)         │
+│            │   /wpresto/*     │                                   │
+│            │ ───────────────► │  wpresto serve (plugin server)    │
+│            │   dynamic miss   │   plugin route → Lambda handler   │
+│            │ ───────────────► │   unmatched  → proxy to WP        │
+└────────────┘                  └───────────────────────────────────┘
 ```
 
 ## Why
@@ -31,15 +38,18 @@ Builds are triggered two ways:
 - **Fast front door** — static HTML/CSS/JS + pre-gzipped assets are cheap to serve.
 - **Smaller attack surface** — the public cache never contains `/wp-admin/`, `/wp-login.php`, `/wp-json/`, `xmlrpc.php`, or WordPress version fingerprints.
 - **Safe deploys** — the live tree is swapped atomically; a failed build leaves the previous site intact.
-- **Dynamic fallback** — anything not cached (search, comments, forms) transparently proxies to the real WordPress backend.
+- **Dynamic-capable** — a plugin system detects dynamic parts (forms, analytics, endpoints), rewrites them to Lambda-style plugin handlers, and flags what's uncovered.
+- **Dynamic fallback** — anything not cached and not covered by a plugin transparently proxies to the real WordPress backend.
 
 ## How it works
 
 1. **Crawl** — breadth-first from the homepage as an anonymous user (no cookies). Same-host only. Extracts pages (`<a href>`, meta refresh) and assets (`<link>`, `<script>`, `<img src/srcset>`, `<source>`, `<video>/<audio>`, CSS `url()`). Blocked paths are never fetched.
-2. **Strip** — removes links/forms/scripts pointing at sensitive paths, the `<meta name="generator">` tag, pingback links, the admin bar (if ever rendered), and tracking query params. Same-host absolute URLs are rewritten to relative so the cache is host-agnostic.
-3. **Minify** — HTML/CSS/JS via [tdewolff/minify](https://github.com/tdewolff/minify). Best-effort: on any minify error the original bytes are kept.
-4. **Compress** — writes a `.gz` sibling for every file so nginx can use `gzip_static`.
-5. **Publish** — builds into `<output.dir>/.staging-<id>`, then atomically renames it to `<output.dir>/live`, removing the previous tree. `build-info.json` records the build.
+2. **Detect** — scans each page for dynamic parts (forms, analytics/tracking scripts, API/AJAX endpoints) and classifies them (contact-form, subscribe, comment-form, search, analytics, geoip, api, ajax).
+3. **Strip** — removes links/forms/scripts pointing at sensitive paths, the `<meta name="generator">` tag, pingback links, the admin bar (if ever rendered), and tracking query params. Same-host absolute URLs are rewritten to relative so the cache is host-agnostic. A form whose class matches a plugin is **kept and its action rewritten** to the plugin route instead of being stripped.
+4. **Minify** — HTML/CSS/JS via [tdewolff/minify](https://github.com/tdewolff/minify). Best-effort: on any minify error the original bytes are kept.
+5. **Compress** — writes a `.gz` sibling for every file so nginx can use `gzip_static`.
+6. **Match** — each detected dynamic part is matched to a plugin by class. Matched parts are served by the plugin; unmatched parts are **flagged** in the report.
+7. **Publish** — builds into `<output.dir>/.staging-<id>`, then atomically renames it to `<output.dir>/live`, removing the previous tree. `build-info.json` records the build and `dynamic-report.json` records the detection/matching outcome.
 
 ## Install
 
@@ -73,7 +83,8 @@ wpresto build
 
 | Command | Description |
 |---|---|
-| `wpresto build` | Crawl the site and publish a new static build |
+| `wpresto build` | Crawl the site, detect dynamic parts, and publish a new static build |
+| `wpresto serve` | Run the plugin server that replaces dynamic parts (Lambda-style handlers) |
 | `wpresto hook` | Run the localhost trigger endpoint for the WP plugin |
 | `wpresto config init` | Write a sample `wpresto.yaml` |
 | `wpresto config get [key]` | Print a config value (or all) |
@@ -119,6 +130,11 @@ hook:
   listen: 127.0.0.1:9090
   # secret: set via WPRESTO_HOOK_SECRET (required when enabled)
 
+plugins:
+  enabled: true                     # detect dynamic parts + run the plugin server
+  listen: 127.0.0.1:9091            # wpresto serve bind address
+  # fallback: http://127.0.0.1:8081 # unmatched requests proxy here (default: site.url)
+
 user_agent: wpresto/1.0 (+local static cache)
 ```
 
@@ -150,6 +166,79 @@ A single-file plugin at `plugin/wpresto-golive/wpresto-golive.php`:
 
 The hook binds to `127.0.0.1` by default and requires the secret (constant-time compare), so it's not reachable off the host.
 
+## Plugins (dynamic parts)
+
+The plugin system replaces the *dynamic* parts of your site so the static cache
+stays functional without the WordPress backend.
+
+**How it works:**
+
+1. **Detect** — during `wpresto build`, every crawled page is scanned for
+   dynamic parts: `<form>` elements (classified as contact-form, subscribe,
+   comment-form, or search) and `<script src>` / API references (analytics,
+   geoip, api, ajax).
+2. **Match** — each detected part is matched to a plugin by class. A plugin
+   declares the classes it handles via `Kinds()`.
+3. **Rewrite** — a form whose class matches a plugin is kept and its `action`
+   is rewritten to the plugin's route (e.g. `/wpresto/contact`), so the static
+   form posts to the plugin server instead of WordPress.
+4. **Flag** — a part no plugin covers is **flagged** in the build output and in
+   `live/dynamic-report.json`. It falls back to WordPress via nginx.
+5. **Serve** — `wpresto serve` runs the matched plugins in a simple HTTP server
+   (Lambda-style handlers). nginx points its dynamic fallback at this server.
+
+**The inventory** (`inventory/`) is a set of Go packages, each a plugin written
+in AWS Lambda Go HTTP-handler style:
+
+```go
+func Handler(ctx context.Context, req *http.Request) (*http.Response, error)
+```
+
+The exact signature the AWS Lambda runtime uses for API Gateway HTTP proxy
+integrations — the same handler code deploys unchanged to Lambda. Each plugin
+registers itself in `init()` and is compiled into the wpresto binary. Adding a
+plugin: create `inventory/<name>/<name>.go`, then add a blank import in
+`inventory/inventory.go`.
+
+**Bundled plugins:**
+
+| Plugin | Route | Replaces |
+|---|---|---|
+| `contact-form` | `POST /wpresto/contact` | WordPress contact forms (CF7, etc.) |
+| `subscribe` | `POST /wpresto/subscribe` | Newsletter/subscribe forms |
+| `geoip` | `GET /wpresto/geoip` | Client geolocation (stub — wire a GeoIP DB) |
+| `analytics` | `POST /wpresto/analytics` | Third-party analytics beacons (GA/GTM) |
+| `urlrewrite` | `GET /wpresto/rewrite/*` | Legacy/changed URL redirects |
+
+**Running the plugin server:**
+
+```sh
+wpresto config set plugins.enabled true
+wpresto config set plugins.listen 127.0.0.1:9091
+# (optional) wpresto config set plugins.fallback http://127.0.0.1:8081
+wpresto serve
+```
+
+The server lists the registered plugins on startup, answers plugin routes, and
+proxies unmatched requests to the fallback (WordPress). Run it under systemd.
+
+**The build report** (`live/dynamic-report.json`) records, per build:
+
+```json
+{
+  "detected": 3,
+  "handled": 2,
+  "flagged": 1,
+  "parts": [
+    {"part": {"page": "/contact/", "kind": "form", "class": "contact-form", "target": "/wp-admin/admin-post.php"}, "plugin": "contact-form", "handled": true},
+    {"part": {"page": "/blog/", "kind": "form", "class": "comment-form", "target": "/wp-comments-post.php"}, "handled": false}
+  ]
+}
+```
+
+`flagged` parts are the ones you need a plugin for — build one in `inventory/`
+and the next build will pick it up.
+
 ## nginx
 
 See [`examples/nginx.conf`](examples/nginx.conf). Key points:
@@ -157,7 +246,11 @@ See [`examples/nginx.conf`](examples/nginx.conf). Key points:
 - `root /var/www/wpresto/live;`
 - `gzip_static on;` — serves the pre-compressed `.gz` siblings.
 - `try_files $uri $uri/index.html $uri.html @dynamic;` — static hit, else fall back.
-- `@dynamic { proxy_pass http://127.0.0.1:8081; }` — uncached requests go to the real WordPress backend.
+- `location /wpresto/ { proxy_pass http://wpresto_plugins; }` — plugin endpoints.
+- `@dynamic { proxy_pass http://wpresto_plugins; }` — the plugin server answers plugin routes and proxies everything else to the WordPress backend.
+
+The plugin server (`wpresto serve`) is the single dynamic entry point, so nginx
+never talks to WordPress directly.
 
 ## Cron
 
@@ -178,7 +271,8 @@ Or use the plugin for on-demand rebuilds after content changes.
 ## Limitations
 
 - **Query-string pages** (e.g. `/?p=123` on non-pretty permalinks, search results) can't map to a clean static path and are skipped; they fall through to the dynamic backend via nginx.
-- **Dynamic behavior** (search, comments, carts, personalization) is not replicated — it falls back to WordPress.
+- **Dynamic behavior** is replaced only where a plugin exists. Contact forms, subscribe forms, analytics, geoip, and URL rewrites are covered by the bundled plugins; anything else (search, comments, carts, personalization) is **flagged** in the build report and falls back to WordPress. Add a plugin in `inventory/` to cover more.
+- **Detection is heuristic** — forms are classified by class/id/field names. Unusual markup may be classified as a generic `form` and flagged rather than matched.
 - **External/CDN assets** are referenced but not downloaded (same-host only).
 - Minification is best-effort; a file that fails to minify is served unminified.
 
@@ -194,13 +288,16 @@ make fmt      # gofmt -w
 Layout:
 
 ```
-cmd/            Cobra CLI (build, hook, config, version)
+cmd/            Cobra CLI (build, serve, hook, config, version)
 internal/config   Viper config + validation
 internal/crawl    BFS crawler, URL/asset extraction, concurrency
-internal/strip    sensitive-content removal + URL rewriting
+internal/detect   dynamic-part detection + classification
+internal/strip    sensitive-content removal + URL rewriting + form→plugin rewrite
 internal/minify   tdewolff minify + gzip
 internal/publish  atomic staging→live swap
 internal/hook     localhost trigger endpoint
+internal/plugin   plugin interface, registry, matcher, simple HTTP server
+inventory/        the plugin inventory (contact-form, subscribe, geoip, analytics, urlrewrite)
 plugin/           WordPress "go live" plugin (PHP)
 examples/         nginx.conf
 ```

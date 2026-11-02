@@ -4,6 +4,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/html"
 )
 
 func testBase(t *testing.T) *url.URL {
@@ -195,5 +197,37 @@ func TestCleanQuery(t *testing.T) {
 	}
 	if c.Query().Get("a") != "1" || c.Query().Get("b") != "2" {
 		t.Errorf("expected other params preserved, got %v", c.Query())
+	}
+}
+
+func TestProcessRewritesFormActionToPlugin(t *testing.T) {
+	base := testBase(t)
+	opts := testOpts()
+	// Simulate the build wiring: a "contact-form" (wpcf7) form is rewritten to
+	// the plugin route; everything else follows the normal policy.
+	opts.RewriteFormAction = func(n *html.Node, b *url.URL) string {
+		for _, a := range n.Attr {
+			if a.Key == "class" && strings.Contains(a.Val, "wpcf7") {
+				return "/wpresto/contact"
+			}
+		}
+		return ""
+	}
+	in := `<html><body>
+<form class="wpcf7" action="/wp-admin/admin-post.php" method="post"><input name="your-message"/></form>
+<form id="commentform" action="/wp-comments-post.php" method="post"><textarea name="comment"></textarea></form>
+</body></html>`
+	out, _, err := Process([]byte(in), base, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(out)
+	// The contact form is kept and its action rewritten to the plugin route.
+	if !strings.Contains(s, "/wpresto/contact") {
+		t.Errorf("expected contact form action rewritten to /wpresto/contact, got: %s", s)
+	}
+	// The comment form (no plugin) is stripped by the wp-endpoints policy.
+	if strings.Contains(s, "commentform") {
+		t.Errorf("expected comment form to be stripped, got: %s", s)
 	}
 }

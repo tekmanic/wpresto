@@ -97,6 +97,29 @@ by cron or by a WordPress "go live" plugin.
 - [x] Branch pushed
 - [x] PR opened
 
+## Phase 13 — Plugin system (dynamic parts) ✅
+- [x] `internal/plugin` — Lambda-style `Handler` (`func(ctx, *http.Request) (*http.Response, error)`),
+      `Plugin` interface (Name/Description/Kinds/Routes/Handle), `FuncPlugin` adapter
+- [x] Registry: `Register`/`All`/`Get`/`FindKind`/`Find`; exact + prefix (`*`) route matching
+- [x] Simple server (`wpresto serve`): plugin routes run the handler; unmatched requests
+      proxy to the WordPress fallback (config `plugins.fallback`)
+- [x] `internal/detect` — scans crawled HTML for dynamic parts, classifies:
+      forms → contact-form / subscribe / comment-form / search;
+      scripts/API → analytics / geoip / api / ajax
+- [x] `inventory/` — 5 example plugins compiled into the binary (each a Go package,
+      self-registering in `init()`): contactform, subscribe, geoip, analytics, urlrewrite
+- [x] Build wiring: detection runs during crawl; matched form actions rewritten to
+      plugin routes (`strip.Options.RewriteFormAction`); `live/dynamic-report.json`
+      written; summary line `dynamic: N detected, M handled, K flagged`
+- [x] Unmatched dynamic parts are FLAGGED in the report (no plugin → visible gap)
+- [x] Config: `plugins` section (enabled, listen, fallback); `serve` command
+- [x] Docs: README plugins section, examples/nginx.conf (plugin server as single
+      dynamic entry point)
+- [x] Tests: registry/server/matching, detect classification, strip form-rewrite,
+      end-to-end build dynamic-report
+- [x] Smoke: `wpresto serve` live — contact 200, validation 422, geoip 200,
+      subscribe 200, analytics 204, rewrite 304/404, unmatched 502 (fallback down)
+
 ---
 
 ## Open / follow-up
@@ -128,3 +151,6 @@ by cron or by a WordPress "go live" plugin.
   for on-demand rebuilds after publishes.
 - **Dynamic features** — search/comments/carts always fall back to WordPress; the static
   cache is a front door, not a replacement.
+- **Heuristic detection** — dynamic-part classification is based on form classes/ids/
+  field names and script patterns; unusual markup may be flagged rather than matched.
+  Flagged parts are visible in `dynamic-report.json` — that's the intended safety net.

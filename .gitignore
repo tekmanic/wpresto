@@ -12,3 +12,8 @@ wpresto.yaml
 *.swp
 .idea/
 .vscode/
+
+# Local smoke-test artifacts
+.smoke-*.log
+.smoke-out/
+smoke-*.sh

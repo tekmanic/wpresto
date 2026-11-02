@@ -25,6 +25,11 @@ type Options struct {
 	StripGeneratorMeta bool
 	// QueryParams is a list of query-parameter names to strip from every URL.
 	QueryParams []string
+	// RewriteFormAction, if non-nil, is called for each <form>. If it returns a
+	// non-empty string, the form's action is rewritten to that (relative) path
+	// and the form is kept — this is how a detected dynamic form is replaced by
+	// a wpresto plugin route. If it returns "", the normal strip policy applies.
+	RewriteFormAction func(n *html.Node, base *url.URL) string
 }
 
 // Report summarizes what was removed from a page.
@@ -156,6 +161,14 @@ func shouldRemove(n *html.Node, base *url.URL, opts Options) bool {
 
 // formShouldRemove applies the StripForms policy.
 func formShouldRemove(n *html.Node, base *url.URL, opts Options) bool {
+	// If a plugin handles this form, rewrite its action to the plugin route
+	// and keep the form (the plugin server will answer it).
+	if opts.RewriteFormAction != nil {
+		if newAction := opts.RewriteFormAction(n, base); newAction != "" {
+			setAttr(n, "action", newAction)
+			return false
+		}
+	}
 	if opts.StripForms == "none" {
 		return false
 	}
@@ -221,6 +234,17 @@ func attr(n *html.Node, key string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// setAttr sets (or appends) an attribute on a node.
+func setAttr(n *html.Node, key, val string) {
+	for i := range n.Attr {
+		if n.Attr[i].Key == key {
+			n.Attr[i].Val = val
+			return
+		}
+	}
+	n.Attr = append(n.Attr, html.Attribute{Key: key, Val: val})
 }
 
 // removeNode unlinks n from its parent and siblings.

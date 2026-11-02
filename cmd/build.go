@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -13,9 +14,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/tekmanic/wpresto/internal/config"
 	"github.com/tekmanic/wpresto/internal/crawl"
+	"github.com/tekmanic/wpresto/internal/detect"
 	"github.com/tekmanic/wpresto/internal/minify"
+	"github.com/tekmanic/wpresto/internal/plugin"
 	"github.com/tekmanic/wpresto/internal/publish"
 	"github.com/tekmanic/wpresto/internal/strip"
+	"golang.org/x/net/html"
 )
 
 var buildCmd = &cobra.Command{
@@ -63,14 +67,25 @@ func init() {
 	rootCmd.AddCommand(buildCmd)
 }
 
-// loadConfig resolves the config file path and loads it.
+// loadConfig resolves the config file path and loads it. If the file is the
+// implicit default (./wpresto.yaml) and it does not exist, config falls back
+// to defaults + environment (env-only usage). An explicitly requested file
+// (-c or $WPRESTO_CONFIG) that is missing is an error.
 func loadConfig() (*config.Config, error) {
 	path := cfgFile
+	explicit := path != ""
 	if path == "" {
 		path = os.Getenv("WPRESTO_CONFIG")
+		explicit = path != ""
 	}
 	if path == "" {
 		path = "wpresto.yaml"
+	}
+	if _, err := os.Stat(path); err != nil {
+		if explicit {
+			return nil, fmt.Errorf("config file %q not found", path)
+		}
+		return config.Load("")
 	}
 	return config.Load(path)
 }
@@ -118,6 +133,19 @@ func RunBuild(ctx context.Context, cfg *config.Config) error {
 		StripGeneratorMeta: cfg.Strip.StripGeneratorMeta,
 		QueryParams:        cfg.Strip.QueryParams,
 	}
+	// When plugins are enabled, rewrite detected dynamic forms to point at the
+	// plugin route that replaces them (the plugin server answers the POST).
+	if cfg.Plugins.Enabled {
+		stripOpt.RewriteFormAction = func(n *html.Node, base *url.URL) string {
+			cls := detect.ClassifyForm(n, base)
+			if pl, ok := plugin.FindKind(cls); ok {
+				if routes := pl.Routes(); len(routes) > 0 {
+					return routes[0].Pattern
+				}
+			}
+			return ""
+		}
+	}
 	minOpt := minify.Options{
 		Enabled: cfg.Minify.Enabled,
 		HTML:    cfg.Minify.HTML,
@@ -129,6 +157,16 @@ func RunBuild(ctx context.Context, cfg *config.Config) error {
 	res, err := cr.Run(ctx)
 	if err != nil {
 		return fmt.Errorf("crawl: %w", err)
+	}
+
+	// Match detected dynamic parts to plugins and write the report into the
+	// staging tree (so it is published to live alongside the site).
+	var dynReport *plugin.Report
+	if cfg.Plugins.Enabled {
+		dynReport = plugin.Match(res.Dynamic)
+		if data, err := json.MarshalIndent(dynReport, "", "  "); err == nil {
+			_ = os.WriteFile(filepath.Join(staging, "dynamic-report.json"), data, 0o644)
+		}
 	}
 
 	info := &publish.BuildInfo{
@@ -149,5 +187,18 @@ func RunBuild(ctx context.Context, cfg *config.Config) error {
 
 	fmt.Printf("build %s complete: %d pages, %d assets, %d bytes in %s (skipped %d, errors %d)\n",
 		buildID, res.Pages, res.Assets, res.Bytes, info.Duration.Round(time.Millisecond), res.Skipped, res.Errors)
+
+	if dynReport != nil {
+		fmt.Printf("dynamic: %d detected, %d handled by plugins, %d flagged (no plugin)\n",
+			dynReport.Detected, dynReport.Handled, dynReport.Flagged)
+		for _, mr := range dynReport.Parts {
+			if mr.Handled {
+				fmt.Printf("  handled %-12s %s -> plugin %s\n", mr.Part.Class, mr.Part.Target, mr.Plugin)
+			} else {
+				fmt.Printf("  FLAGGED %-12s %s (%s) — no plugin; falls back to WordPress\n",
+					mr.Part.Class, mr.Part.Target, mr.Part.Page)
+			}
+		}
+	}
 	return nil
 }

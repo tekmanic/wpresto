@@ -66,7 +66,7 @@ will actually use.`,
 	Example: `  wpresto config get
   wpresto config get site.url
   wpresto config get output.dir`,
-	Args:  cobra.MaximumNArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		v, err := viperForConfig()
 		if err != nil {
@@ -92,7 +92,7 @@ Values are written as strings; use dotted keys (e.g. site.url).`,
 	Example: `  wpresto config set site.url http://example.com
   wpresto config set output.dir /var/www/wpresto
   wpresto config set hook.enabled true`,
-	Args:  cobra.ExactArgs(2),
+	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := cfgFile
 		if path == "" {

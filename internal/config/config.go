@@ -21,6 +21,7 @@ type Config struct {
 	Minify    MinifyConfig   `mapstructure:"minify"`
 	Compress  CompressConfig `mapstructure:"compress"`
 	Hook      HookConfig     `mapstructure:"hook"`
+	Plugins   PluginsConfig  `mapstructure:"plugins"`
 	UserAgent string         `mapstructure:"user_agent"`
 }
 
@@ -82,6 +83,17 @@ type HookConfig struct {
 	Secret string `mapstructure:"secret"`
 }
 
+// PluginsConfig controls the plugin system that replaces dynamic parts.
+type PluginsConfig struct {
+	// Enabled turns on dynamic-part detection and the plugin server.
+	Enabled bool `mapstructure:"enabled"`
+	// Listen is the address the plugin server binds to (wpresto serve).
+	Listen string `mapstructure:"listen"`
+	// Fallback is the WordPress backend that unmatched requests proxy to.
+	// Defaults to site.url when empty.
+	Fallback string `mapstructure:"fallback"`
+}
+
 // DefaultBlocklist returns the default sensitive path prefixes.
 func DefaultBlocklist() []string {
 	return []string{
@@ -134,6 +146,7 @@ func Default() *Config {
 		Minify:    MinifyConfig{Enabled: true, HTML: true, CSS: true, JS: true},
 		Compress:  CompressConfig{Gzip: true},
 		Hook:      HookConfig{Enabled: false, Listen: "127.0.0.1:9090", Secret: ""},
+		Plugins:   PluginsConfig{Enabled: true, Listen: "127.0.0.1:9091", Fallback: ""},
 		UserAgent: "wpresto/1.0 (+local static cache)",
 	}
 }
@@ -164,6 +177,9 @@ func Load(path string) (*Config, error) {
 	v.SetDefault("hook.enabled", def.Hook.Enabled)
 	v.SetDefault("hook.listen", def.Hook.Listen)
 	v.SetDefault("hook.secret", def.Hook.Secret)
+	v.SetDefault("plugins.enabled", def.Plugins.Enabled)
+	v.SetDefault("plugins.listen", def.Plugins.Listen)
+	v.SetDefault("plugins.fallback", def.Plugins.Fallback)
 	v.SetDefault("user_agent", def.UserAgent)
 
 	// Environment overrides (WPRESTO_SITE_URL, WPRESTO_HOOK_SECRET, ...).
@@ -216,6 +232,14 @@ func (c *Config) Validate() error {
 	}
 	if c.Hook.Enabled && c.Hook.Secret == "" {
 		return fmt.Errorf("hook.secret is required when hook.enabled is true")
+	}
+	if c.Plugins.Enabled && c.Plugins.Listen == "" {
+		return fmt.Errorf("plugins.listen is required when plugins.enabled is true")
+	}
+	if c.Plugins.Fallback != "" &&
+		!strings.HasPrefix(c.Plugins.Fallback, "http://") &&
+		!strings.HasPrefix(c.Plugins.Fallback, "https://") {
+		return fmt.Errorf("plugins.fallback must start with http:// or https://")
 	}
 	return nil
 }

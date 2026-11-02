@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	"github.com/tekmanic/wpresto/internal/config"
+	"github.com/tekmanic/wpresto/internal/detect"
 	"github.com/tekmanic/wpresto/internal/minify"
 	"github.com/tekmanic/wpresto/internal/publish"
 	"github.com/tekmanic/wpresto/internal/strip"
@@ -54,6 +55,9 @@ type Crawler struct {
 	assets  int
 	skipped int
 	errors  int
+
+	dynamicMu sync.Mutex
+	dynamic   []detect.DynamicPart
 }
 
 type job struct {
@@ -68,6 +72,8 @@ type Result struct {
 	Skipped int
 	Errors  int
 	Bytes   int64
+	// Dynamic is the set of dynamic parts detected across all crawled pages.
+	Dynamic []detect.DynamicPart
 }
 
 // New builds a Crawler. staging is the directory the static tree is written to.
@@ -122,6 +128,9 @@ func (c *Crawler) Run(ctx context.Context) (*Result, error) {
 
 	res := &Result{Pages: c.pages, Assets: c.assets, Skipped: c.skipped, Errors: c.errors}
 	res.Bytes, _ = publish.TreeBytes(c.staging)
+	c.dynamicMu.Lock()
+	res.Dynamic = c.dynamic
+	c.dynamicMu.Unlock()
 	return res, nil
 }
 
@@ -213,6 +222,13 @@ func (c *Crawler) processPage(ctx context.Context, u *url.URL) []job {
 		// Pages with a residual query can't map to a clean static path.
 		c.noteSkipped(u)
 		return nil
+	}
+
+	// Detect dynamic parts (forms, analytics, API/AJAX) for the plugin system.
+	if parts := detect.Detect(body, u); len(parts) > 0 {
+		c.dynamicMu.Lock()
+		c.dynamic = append(c.dynamic, parts...)
+		c.dynamicMu.Unlock()
 	}
 
 	var newJobs []job

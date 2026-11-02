@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/tekmanic/wpresto/internal/config"
+	"github.com/tekmanic/wpresto/internal/plugin"
 )
 
 // TestRunBuildEndToEnd validates the full CLI orchestrator: config -> crawl ->
@@ -107,4 +109,97 @@ func readFile(t *testing.T, path string) string {
 		t.Fatalf("read %s: %v", path, err)
 	}
 	return string(b)
+}
+
+// TestRunBuildDynamicReport validates the plugin-system wiring in the build:
+// dynamic parts are detected, matched to a registered plugin (form action
+// rewritten to the plugin route), unmatched parts are flagged, and the report
+// is published to live.
+func TestRunBuildDynamicReport(t *testing.T) {
+	// Register a test plugin that handles contact forms (the cmd test binary
+	// does not link the inventory, so we register one here).
+	plugin.Register(plugin.FuncPlugin{
+		NameStr: "test-contact",
+		Desc:    "test contact-form handler",
+		KindsL:  []string{"contact-form"},
+		RoutesL: []plugin.Route{{Pattern: "/wpresto/contact", Methods: []string{"POST"}}},
+		Handler: func(ctx context.Context, req *http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: 200, Body: http.NoBody}, nil
+		},
+	})
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		switch r.URL.Path {
+		case "/":
+			_, _ = w.Write([]byte(`<html><body>
+<a href="/contact/">Contact</a>
+<a href="/blog/">Blog</a>
+</body></html>`))
+		case "/contact/":
+			_, _ = w.Write([]byte(`<html><body>
+<form class="wpcf7" action="/wp-admin/admin-post.php" method="post">
+<input name="your-name"/><input name="your-email" type="email"/>
+<textarea name="your-message"></textarea><button>Send</button>
+</form>
+</body></html>`))
+		case "/blog/":
+			_, _ = w.Write([]byte(`<html><body>
+<a href="/">Home</a>
+<form id="commentform" action="/wp-comments-post.php" method="post">
+<textarea name="comment"></textarea>
+</form>
+</body></html>`))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	outDir := t.TempDir()
+	cfg := config.Default()
+	cfg.Site.URL = srv.URL
+	cfg.Output.Dir = outDir
+	cfg.Crawl.Timeout = 10 * time.Second
+	cfg.Crawl.MaxPages = 50
+	cfg.Plugins.Enabled = true
+
+	if err := RunBuild(context.Background(), cfg); err != nil {
+		t.Fatalf("RunBuild: %v", err)
+	}
+
+	live := filepath.Join(outDir, "live")
+
+	// The contact form's action is rewritten to the plugin route.
+	contact := readFile(t, filepath.Join(live, "contact", "index.html"))
+	if !strings.Contains(contact, "/wpresto/contact") {
+		t.Errorf("contact form action should be rewritten to /wpresto/contact, got: %s", contact)
+	}
+	if strings.Contains(contact, "admin-post") {
+		t.Errorf("contact form should no longer post to admin-post, got: %s", contact)
+	}
+
+	// The comment form (no plugin) is stripped.
+	blog := readFile(t, filepath.Join(live, "blog", "index.html"))
+	if strings.Contains(blog, "commentform") {
+		t.Errorf("comment form should be stripped (no plugin), got: %s", blog)
+	}
+
+	// dynamic-report.json is published and reflects the match + flag.
+	repRaw := readFile(t, filepath.Join(live, "dynamic-report.json"))
+	var rep plugin.Report
+	if err := json.Unmarshal([]byte(repRaw), &rep); err != nil {
+		t.Fatalf("unmarshal dynamic-report.json: %v", err)
+	}
+	if rep.Detected < 2 {
+		t.Errorf("expected >=2 detected dynamic parts, got %d", rep.Detected)
+	}
+	if rep.Handled < 1 {
+		t.Errorf("expected >=1 handled (contact-form), got %d", rep.Handled)
+	}
+	if rep.Flagged < 1 {
+		t.Errorf("expected >=1 flagged (comment-form), got %d", rep.Flagged)
+	}
 }
